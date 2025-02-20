@@ -22,9 +22,17 @@ const io = new Server(server, {
   },
 });
 
+const users = new Map(); // Map to store users and their socket IDs
+
 // Handle WebSocket connections
 io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
+
+  // Register user with their socket ID
+  socket.on("register_user", (userId) => {
+    users.set(userId, socket.id);
+    console.log(`User ${userId} registered with socket ${socket.id}`);
+  });
 
   // Listen for chat messages
   socket.on("send_message", async (data) => {
@@ -54,10 +62,13 @@ io.on("connection", (socket) => {
       console.log("Message saved to database");
 
       // Emit message to the sender
-      io.to(receiverId).emit("receive_message", {
-        senderId,
-        message,
-      });
+      const receiverSocketId = users.get(receiverId);
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("receive_message", {
+          senderId,
+          message,
+        });
+      }
     } catch (error) {
       console.error("Error saving message to database", error);
     }
@@ -67,6 +78,11 @@ io.on("connection", (socket) => {
 
   // Handle user disconnection
   socket.on("disconnect", () => {
+    users.forEach((socketId, userId) => {
+      if (socketId === socket.id) {
+        users.delete(userId);
+      }
+    });
     console.log(`User disconnected: ${socket.id}`);
   });
 });
